@@ -1,63 +1,103 @@
 ================================================================================
 KẾ HOẠCH PHÂN CÔNG CÔNG VIỆC & QUY TRÌNH DATA FLYWHEEL (NHÓM 5 THÀNH VIÊN)
 Bài toán: Instance Segmentation Giao thông Việt Nam (yolo26n-seg, imgsz=640)
+Tài liệu hướng dẫn gán nhãn chính thức: https://competition.antco.ai/data/labeling_guideline.md
 ================================================================================
 
-1. DANH SÁCH 11 LỚP ĐỐI TƯỢNG CHUẨN & QUY TẮC GÁN NHÃN CHI TIẾT
+1. DANH SÁCH 11 LỚP ĐỐI TƯỢNG CẦN PHÂN ĐOẠN (INSTANCE SEGMENTATION)
 --------------------------------------------------------------------------------
+Mô hình phải tìm từng đối tượng và vẽ mask riêng cho mỗi đối tượng. Thứ tự ID cố định, nhãn theo định dạng YOLO-seg (đa giác polygon).
 
 0 = Car (Ô tô con)
-- Định nghĩa: Bao trọn thân xe, bánh xe, gương chiếu hậu của ô tô con (sedan, hatchback, SUV, MPV 4–7 chỗ, taxi, bán tải pickup không chở hàng quá khổ).
-- Lưu ý biên: Xe bán tải (Pickup): Nếu thùng sau trống hoặc đậy nắp thùng thông thường → gán 0: Car. Nếu chở hàng cồng kềnh chất cao như xe tải → gán 2: Truck.
+- Định nghĩa: Sedan, SUV, minivan, xe 7 chỗ, bán tải (pickup), taxi, xe điện du lịch, xe cứu thương dạng van.
+- Phạm vi chỗ ngồi: Xe từ 4 đến 15 chỗ (bao gồm cả xe 9–15 chỗ) đều thuộc Car.
 
 1 = Bus (Xe buýt / xe khách)
-- Định nghĩa: Bao trọn thân xe buýt nội đô, xe khách (16 chỗ trở lên như Ford Transit/Solati, xe giường nằm, xe buýt 2 tầng).
-- Lưu ý biên: Xe 16 chỗ: Tuy kích thước nhỏ hơn xe buýt lớn nhưng vẫn thuộc nhóm xe chở khách → bắt buộc gán 1: Bus, không gán Car hay Truck.
+- Định nghĩa: Xe buýt nội đô, xe khách từ 16 chỗ trở lên (xe ghế ngồi, xe giường nằm, xe buýt 2 tầng).
+- Lưu ý: Xe 9–15 chỗ thuộc về 0 = Car, KHÔNG tính là Bus.
 
 2 = Truck (Xe tải)
-- Định nghĩa: Bao trọn đầu kéo, thùng hàng, bánh xe của xe tải các loại (tải nhỏ 500kg, tải thùng kín, tải ben, xe bồn, xe container).
-- Lưu ý biên: Nếu xe đầu kéo có rơ-moóc phía sau, vẽ 1 mask chung bao gồm cả đầu kéo lẫn thùng rơ-moóc.
+- Định nghĩa: Xe tải các cỡ, xe ben, xe bồn, xe cứu hỏa, đầu kéo (CHỈ tính phần cabin và thân đầu kéo).
+- Lưu ý cực quan trọng: Rơ-moóc hoặc sơ-mi rơ-moóc phía sau đầu kéo KHÔNG thuộc Truck mà thuộc lớp 3: Other vehicle.
 
-3 = Other vehicle (Phương tiện khác: xích lô, xe ba gác, xe điện du lịch, xe chuyên dụng...)
-- Định nghĩa: Bao trọn các phương tiện giao thông không thuộc 0, 1, 2, 4, 6: xe ba gác máy (xe lôi), xe điện du lịch, xe cứu thương, xe cứu hỏa, xe lu/máy xúc, xe tự chế 3–4 bánh.
-- Lưu ý biên: Người lái xe ba gác/xe điện: Gộp chung người lái (và hàng hóa trên thùng) vào cùng 1 mask Other vehicle (không tách riêng Pedestrian).
+3 = Other vehicle (Phương tiện khác)
+- Định nghĩa: Ba gác máy, xích lô, xe lam, xe công trình (xe lu, máy xúc, xe ủi...), xe máy cày, rơ-moóc và sơ-mi rơ-moóc (kể cả thùng container), mọi phương tiện cơ giới/thô sơ không thuộc lớp khác.
 
-4 = Motorcycle (Xe máy - không người)
-- Định nghĩa: Bao trọn khung xe, bánh xe, gương của xe máy, xe tay ga, xe máy điện KHÔNG CÓ NGƯỜI đang ngồi trên xe.
-- Lưu ý biên: Áp dụng cho xe dựng trên vỉa hè, bãi đỗ, hoặc người đứng bên cạnh dắt bộ (khi người đứng hẳn sang một bên và chưa ngồi lên yên).
+4 = Motorcycle (Xe máy không người)
+- Định nghĩa: Xe máy, xe tay ga, xe điện 2 bánh kiểu xe máy, không có người ngồi trên yên (đang đỗ bên đường hoặc đang được người dắt bộ).
 
-5 = Motorcyclist (Xe máy - có người: 1 mask duy nhất bao gồm cả người + xe)
-- Định nghĩa: [QUY TẮC GỘP BẮT BUỘC] Vẽ 1 polygon duy nhất bao trùm toàn bộ người lái + người ngồi sau (nếu có) + chiếc xe máy + hàng hóa chở kèm.
-- Lưu ý biên: 
-  + Chở 2–3 người trên 1 xe: Vẫn chỉ là 1 instance Motorcyclist duy nhất (không tách người ngồi sau thành Pedestrian).
-  + Chở hàng cồng kềnh / mặc áo mưa: Gộp cả hàng hóa buộc sau yên và tà áo mưa phủ xe vào chung 1 mask.
+5 = Motorcyclist (Xe máy có người)
+- Định nghĩa [QUY TẮC GỘP BẮT BUỘC]: Xe máy có ít nhất một người ngồi (kể cả đang dừng đèn đỏ, người ngồi sau, trẻ em): MỘT instance duy nhất phủ cả xe và mọi người trên xe (bao gồm cả hàng hóa buộc kèm / áo mưa phủ). Tuyệt đối không tách người ngồi sau thành Pedestrian.
 
-6 = Bicycle (Xe đạp - không người)
-- Định nghĩa: Bao trọn khung xe, 2 bánh xe của xe đạp thường, xe đạp điện bàn đạp KHÔNG CÓ NGƯỜI ngồi trên xe.
-- Lưu ý biên: Chỉ gán khi xe dựng sát lề, bãi xe, không có người điều khiển.
+6 = Bicycle (Xe đạp không người)
+- Định nghĩa: Xe đạp thường, xe đạp điện kiểu xe đạp (có bàn đạp), không có người (đang đỗ hoặc đang được người dắt bộ).
+- Lưu ý: Xe đạp điện dạng xe máy điện (không có bàn đạp) thuộc 4: Motorcycle hoặc 5: Motorcyclist.
 
-7 = Cyclist (Xe đạp - có người: 1 mask duy nhất bao gồm cả người + xe)
-- Định nghĩa: [QUY TẮC GỘP BẮT BUỘC] Vẽ 1 polygon duy nhất bao trùm toàn bộ người đạp xe + chiếc xe đạp.
-- Lưu ý biên: Xích lô Việt Nam: Khuyến nghị thống nhất toàn đội gán 3: Other vehicle cho xích lô vì hình dáng 3 bánh khác hẳn xe đạp 2 bánh, tránh làm nhiễu đặc trưng của Cyclist.
+7 = Cyclist (Xe đạp có người)
+- Định nghĩa [QUY TẮC GỘP BẮT BUỘC]: Xe đạp có người đi: MỘT instance duy nhất phủ cả xe đạp và người đạp xe.
 
 8 = Pedestrian (Người đi bộ)
-- Định nghĩa: Bao trọn cơ thể người đi bộ (đầu, thân, tay, chân, ba lô/túi xách đang đeo) đang đi trên vỉa hè, băng qua đường, hoặc đứng chờ.
-- Lưu ý biên: 
-  + Người đẩy xe hàng rong/xe đẩy trẻ em: Vẽ mask cho người là Pedestrian (bỏ qua xe đẩy tay không động cơ).
-  + Người đã ngồi lên yên xe máy/xe đạp: Không gán Pedestrian, phải gộp vào lớp 5 hoặc 7.
+- Định nghĩa: Mọi người không ngồi trên phương tiện: đi bộ, đứng, ngồi, trẻ em, người dắt xe.
+- Lưu ý: Khi người dắt xe máy hoặc xe đạp: Người dắt là 8: Pedestrian, xe đang được dắt là 4: Motorcycle hoặc 6: Bicycle (hai instance riêng biệt).
 
 9 = Sign (Biển báo giao thông)
-- Định nghĩa: Chỉ vẽ polygon cho mặt bảng biển báo giao thông (hình tròn, tam giác, vuông, chữ nhật chỉ dẫn làn đường/tên đường). KHÔNG vẽ cột sắt chống biển báo.
-- Lưu ý biên: 
-  + Bỏ qua biển quảng cáo cửa hàng, pano thương mại, biển số nhà.
-  + Cụm 2–3 biển báo gắn trên cùng 1 cột: Vẽ từng mask riêng biệt cho mỗi mặt biển báo.
+- Định nghĩa: Biển báo hiệu đường bộ (cấm, nguy hiểm, hiệu lệnh), biển chỉ dẫn làn đường/tên đường, biển công trường thi công.
+- Giới hạn mask: Chỉ phủ mặt bảng biển báo, KHÔNG phủ cột sắt chống biển.
+- Bỏ qua: Biển quảng cáo, biển hiệu cửa hàng, pano thương mại, biển số nhà (không gán). Cụm nhiều biển báo gắn trên 1 cột thì vẽ từng mask riêng cho mỗi mặt biển.
 
 10 = Traffic light (Đèn giao thông)
-- Định nghĩa: Vẽ polygon bao trọn hộp đèn tín hiệu giao thông (gồm khung vỏ hộp chứa các bóng đèn đỏ/vàng/xanh và bộ đếm giây gắn liền). KHÔNG vẽ cột đèn hay cần vươn.
-- Lưu ý biên: Đèn tín hiệu dành cho người đi bộ (hình người xanh/đỏ) cũng tính là 10: Traffic light.
+- Định nghĩa: Cả hộp đèn tín hiệu giao thông (gồm khung vỏ hộp chứa các bóng đèn xe cộ đỏ/vàng/xanh, bộ đếm giây, đèn tín hiệu người đi bộ), không chỉ bóng đang sáng. Mỗi hộp đèn là một instance.
+- Bỏ qua: Đèn xe và đèn trang trí đô thị (không gán). KHÔNG phủ cột đèn hay cần vươn.
 
 ================================================================================
-2. BỘ DỮ LIỆU HIỆN CÓ & LOG ÁNH XẠ (DATASET METADATA & REMAP LOG)
+2. TÓM TẮT QUY ƯỚC GÁN NHÃN & NGUYÊN TẮC VẼ MASK CHUẨN
+================================================================================
+
+1. NGUYÊN TẮC CHE KHUẤT & ZERO-OVERLAP (Mask chỉ phủ phần nhìn thấy, không chồng nhau):
+- Vật ở phía trước giữ pixel, vật phía sau chỉ phủ phần còn lại nhìn thấy được.
+- Tuyệt đối không phủ bóng đổ, hình ảnh phản chiếu trên kính/mặt đường, hoặc ánh đèn pha rọi sáng.
+- Vật bị che cắt ngang bởi cột điện, cành cây hoặc dây điện vẫn được tính là MỘT instance (vẽ multi-polygon hoặc polygon liên kết).
+
+2. ĐẦU KÉO VÀ RƠ-MOÓC / CONTAINER:
+- Phần đầu kéo (cabin và khung đầu kéo): gán 2: Truck.
+- Phần rơ-moóc hoặc sơ-mi rơ-moóc (kể cả thùng container): gán 3: Other vehicle.
+- Đây là HAI instance riêng biệt.
+
+3. MOTORCYCLIST VS MOTORCYCLE & CYCLIST VS BICYCLE:
+- Có người ngồi lên xe (kể cả dừng đèn đỏ, người ngồi sau, trẻ em) $\rightarrow$ 1 instance Motorcyclist (5) hoặc Cyclist (7).
+- Xe không người, đang đỗ hoặc đang được dắt $\rightarrow$ Motorcycle (4) hoặc Bicycle (6). Người dắt xe là Pedestrian (8) (hai instance riêng biệt).
+
+4. DANH MỤC ĐỐI TƯỢNG KHÔNG GÁN (DO NOT ANNOTATE):
+- Vật nằm phía sau lớp kính của cửa hàng, showroom.
+- Người ngồi bên trong ô tô nhìn thấy qua kính xe.
+- Hình ảnh người, xe vẽ trên áp phích, pano quảng cáo, thân xe buýt.
+- Động vật (chó, mèo, chim, gia súc...).
+- Xe đẩy tay (xe đẩy hàng rong, xe đẩy trẻ em).
+- Đối tượng quá nhỏ: Cạnh ngắn dưới khoảng 1.25% cạnh dài của ảnh (trên ảnh 640x640: đối tượng có kích thước nhỏ hơn 8 pixel).
+
+5. CÂY QUYẾT ĐỊNH KHI PHÂN VÂN (DECISION TREE):
+- Xe 2 bánh:
+  + Có người ngồi trên xe $\rightarrow$ 5: Motorcyclist hoặc 7: Cyclist.
+  + Không có người ngồi (đỗ, dắt) $\rightarrow$ 4: Motorcycle hoặc 6: Bicycle.
+- Xe 4 bánh trở lên:
+  + Nhỏ dưới khoảng 9 chỗ hoặc từ 9–15 chỗ, xe điện du lịch, cứu thương van $\rightarrow$ 0: Car.
+  + Kiểu xe buýt, xe khách từ 16 chỗ trở lên $\rightarrow$ 1: Bus.
+  + Xe tải, xe ben, xe bồn, xe cứu hỏa, cabin đầu kéo $\rightarrow$ 2: Truck.
+  + Còn lại (rơ-moóc, container, ba gác máy, xích lô, xe lam, xe công trình...) $\rightarrow$ 3: Other vehicle.
+
+6. ĐỊNH DẠNG FILE NHÃN (.TXT) & CẤU TRÚC DỮ LIỆU NỘP BÀI:
+- Mỗi dòng trong tệp nhãn (.txt) đại diện cho một instance:
+  <id lớp> <x1> <y1> <x2> <y2> <x3> <y3> ...
+  Ví dụ: 5 0.52 0.61 0.55 0.58 0.58 0.62 0.54 0.66
+- Tọa độ đa giác chuẩn hóa về [0, 1] theo kích thước ảnh. Ảnh không có đối tượng nào thì để tệp .txt rỗng.
+- Cấu trúc file zip dữ liệu chuẩn Ultralytics YOLO-seg:
+  du_lieu.zip
+  ├── images/       (ảnh .jpg/.png)
+  ├── labels/       (một .txt cho mỗi ảnh)
+  └── data.yaml     (tùy chọn)
+
+================================================================================
+3. BỘ DỮ LIỆU HIỆN CÓ & LOG ÁNH XẠ (DATASET METADATA & REMAP LOG)
 ================================================================================
 
 [DATASET 1: Vietnam Traffic Vehicle Detection (Roboflow v1)]
@@ -65,30 +105,29 @@ Bài toán: Instance Segmentation Giao thông Việt Nam (yolo26n-seg, imgsz=640
 - Nguồn & URL: https://universe.roboflow.com/phan-ky-dat/vietnam-traffic-vehicle-detectio/dataset/1
 - Giấy phép (License): CC BY 4.0
 - Số lượng ảnh: 756 ảnh (Train: 601 ảnh, Valid: 126 ảnh, Test: 29 ảnh).
-- Tiền xử lý sẵn: Kích thước 640x640 (Fit with black edges, auto-orient EXIF).
+- Tiền xử lý: Kích thước 640x640 (Fit with black edges, auto-orient EXIF).
 - 5 Lớp gốc của Dataset: ['bicycle', 'bus', 'car', 'motorcycle', 'truck']
 - Bảng quy tắc ánh xạ (Remap Rule) sang 11 lớp chuẩn:
   + Gốc [2] car         --> Chuẩn [0] Car
-  + Gốc [1] bus         --> Chuẩn [1] Bus
-  + Gốc [4] truck       --> Chuẩn [2] Truck
-  + Gốc [3] motorcycle  --> Chuẩn [4] Motorcycle (nếu xe đỗ) HOẶC [5] Motorcyclist (nếu có người lái - xử lý qua pipeline ghép cặp tự động của TV 2)
-  + Gốc [0] bicycle     --> Chuẩn [6] Bicycle (nếu xe đỗ) HOẶC [7] Cyclist (nếu có người đạp - xử lý qua pipeline ghép cặp tự động của TV 2)
-- Trạng thái hiện tại: Đã tải về local, sẵn sàng remap nhãn để làm nòng cốt cho Dataset v1 chạy baseline.
+  + Gốc [1] bus         --> Chuẩn [1] Bus (xe 16 chỗ trở lên; nếu có xe 9-15 chỗ thì remap về Car)
+  + Gốc [4] truck       --> Chuẩn [2] Truck (chỉ cabin đầu kéo; nếu ảnh có rơ-moóc/container phải tách thêm instance [3] Other vehicle)
+  + Gốc [3] motorcycle  --> Chuẩn [4] Motorcycle (nếu xe đỗ/dắt) HOẶC [5] Motorcyclist (nếu có người ngồi - xử lý qua pipeline ghép cặp tự động của TV 2)
+  + Gốc [0] bicycle     --> Chuẩn [6] Bicycle (nếu xe đỗ/dắt) HOẶC [7] Cyclist (nếu có người đi - xử lý qua pipeline ghép cặp tự động của TV 2)
 
 ================================================================================
-3. PHÂN CÔNG VAI TRÒ CHI TIẾT CHO 5 THÀNH VIÊN
+4. PHÂN CÔNG VAI TRÒ CHI TIẾT CHO 5 THÀNH VIÊN
 ================================================================================
 
 [THÀNH VIÊN 1]: Team Lead & Data Architect (Quản lý tiến độ, chuẩn hóa & báo cáo)
-- Thiết lập tài liệu quy tắc gán nhãn (Annotation Guideline) chặt chẽ cho 11 lớp (đặc biệt cách gộp mask người + xe cho lớp 5 và 7, cách xử lý hàng cồng kềnh).
-- Quản lý version dữ liệu (v1, v2, v3...) và duy trì file log/metadata của mọi public dataset (tên, đường dẫn URL, giấy phép/license, số ảnh đã dùng, bảng ánh xạ class) để nộp báo cáo cuối kỳ.
-- Xây dựng bộ Golden Val Set (300 - 500 ảnh đại diện đủ nắng, mưa, đêm, kẹt xe) cố định qua các vòng để đo lường công bằng.
+- Duyệt và ban hành tài liệu quy tắc gán nhãn chính thức (dựa trên Antco AI Guideline) cho toàn đội.
+- Xây dựng bộ Golden Val Set (300 - 500 ảnh đại diện đủ nắng, mưa, đêm, kẹt xe) cố định qua các vòng, đảm bảo không rò rỉ dữ liệu sang tập Train.
+- Quản lý version dữ liệu (v1, v2, v3...) và duy trì file log/metadata của mọi public dataset để nộp báo cáo cuối kỳ.
 
 [THÀNH VIÊN 2]: Auto-Labeling & Synthetic Engineer (Tự động hóa nhãn & dữ liệu tổng hợp)
-- Xây dựng pipeline gán nhãn nháp tự động (kết hợp detector mạnh như YOLO11x/YOLOv8x/GroundingDINO + SAM 2 để sinh polygon mask định dạng YOLO-seg).
-- Viết script ghép cặp tự động (IoU / Overlap) giữa 'person' và 'motorcycle'/'bicycle' để tự động tách lớp 4 vs 5 và 6 vs 7 cho bộ dữ liệu đã tải về.
-- Tạo dữ liệu tổng hợp (Copy-Paste augmentation) nhân bản các lớp hiếm (3: Other vehicle, 6: Bicycle, 7: Cyclist) sang các nền ảnh đêm/mưa.
-- Thực hiện kỹ thuật Tiling (cắt ảnh 2x2 có chồng lấn 15-20%) cho ảnh độ phân giải cao để giữ chi tiết các vật thể nhỏ (Sign, Traffic light) khi resize về 640x640.
+- Xây dựng pipeline gán nhãn nháp tự động (detector mạnh + SAM 2) sinh polygon mask định dạng YOLO-seg.
+- Viết script ghép cặp tự động (IoU / Overlap) giữa 'person' và 'motorcycle'/'bicycle' để tự động tách lớp 4 vs 5 và 6 vs 7 cho bộ dữ liệu hiện có.
+- Viết module nhận diện và tách rơ-moóc/container ra khỏi đầu kéo để gán đúng lớp 3: Other vehicle và 2: Truck.
+- Thực hiện Tiling và Copy-Paste augmentation cho các lớp hiếm (3: Other vehicle, 6: Bicycle, 7: Cyclist, 9: Sign, 10: Traffic light).
 
 [THÀNH VIÊN 3]: Public Data & Edge-Case Hunter (Khai thác dữ liệu công khai & săn cảnh khó)
 - Chạy script ánh xạ (remap) nhãn cho bộ dataset hiện có (`Vietnam Traffic Vehicle Detectio.v1i.yolo26`) về 11 lớp chuẩn.
@@ -98,16 +137,16 @@ Bài toán: Instance Segmentation Giao thông Việt Nam (yolo26n-seg, imgsz=640
 
 [THÀNH VIÊN 4]: Quality Assurance (QA) & Annotation Lead (Duyệt nhãn & sửa nhãn tinh)
 - Quản lý workspace trên công cụ gán nhãn (CVAT hoặc Roboflow), chia batch nhãn nháp cho cả nhóm cùng sửa.
-- Duyệt chéo (Cross-check) 100% nhãn trước khi đóng gói vào bộ train: bắt lỗi sót mask nhỏ (9: Sign, 10: Traffic light), lỗi vẽ đè mask, hoặc gán nhầm Other vehicle.
+- Duyệt chéo (Cross-check) 100% nhãn: bắt lỗi sót mask nhỏ (9: Sign, 10: Traffic light), lỗi vẽ đè mask (vi phạm Zero-Overlap), lỗi gộp rơ-moóc vào xe tải, lỗi quên gộp người ngồi trên xe máy/xe đạp.
 - Trực tiếp gán nhãn tay các mẫu cực khó mà auto-label thất bại.
 
 [THÀNH VIÊN 5]: MLOps, Training & Error Analyst (Huấn luyện yolo26n-seg & Phân tích lỗi)
 - Thiết lập pipeline train yolo26n-seg (imgsz=640) trên Colab/Kaggle/GPU thuê, tối ưu hyperparameter augmentation (mosaic, copy-paste, hsv, scale).
-- Sau mỗi vòng train, xuất Confusion Matrix, tính mAP50-95 theo từng class và rút trích các ảnh False Positive / False Negative nặng nhất.
-- Gửi danh sách "lớp đang yếu" ngược lại cho TV 2 và TV 3 để bổ sung đúng loại dữ liệu thiếu ở vòng tiếp theo (Active Learning).
+- Nhận Dataset v1 đã remap và chạy baseline đầu tiên để lấy điểm mốc (checkpoint).
+- Sau mỗi vòng train, xuất Confusion Matrix, tính mAP50-95 theo từng class và rút trích các ảnh False Positive / False Negative nặng nhất để báo lại cho TV 2 và TV 3 (Active Learning).
 
 ================================================================================
-4. QUY TRÌNH PHỐI HỢP THEO TỪNG GIAI ĐOẠN (DATA FLYWHEEL)
+5. QUY TRÌNH PHỐI HỢP THEO TỪNG GIAI ĐOẠN (DATA FLYWHEEL)
 ================================================================================
 
 GIAI ĐOẠN 1: Khởi động & Baseline (15% thời gian đầu)
@@ -121,7 +160,7 @@ GIAI ĐOẠN 1: Khởi động & Baseline (15% thời gian đầu)
 GIAI ĐOẠN 2: Tăng tốc Auto-Label & Phủ dữ liệu Việt Nam (50% thời gian giữa)
 - TV 3 trích xuất ảnh giao thông Việt Nam (đủ ngày, đêm, mưa, kẹt xe) đẩy qua pipeline SAM 2 của TV 2 để sinh nhãn nháp.
 - Cả 5 người dành khung giờ cố định (1-2 tiếng/ngày) sửa nhãn nháp trên CVAT; TV 4 chốt kiểm duyệt và gộp thành Dataset v2.
-- TV 2 chạy script Copy-Paste cấy thêm Other vehicle (xích lô, xe ba gác) và Bicycle/Cyclist vào ảnh đường phố.
+- TV 2 chạy script Copy-Paste cấy thêm Other vehicle (xích lô, xe ba gác, rơ-moóc) và Bicycle/Cyclist vào ảnh đường phố.
 
 GIAI ĐOẠN 3: Active Learning & Sửa lỗi chuyên sâu (25% thời gian tiếp theo)
 - TV 5 phân tích kết quả v2: xác định lớp có mAP thấp nhất (thường là Sign, Traffic light, Other vehicle).
@@ -129,12 +168,16 @@ GIAI ĐOẠN 3: Active Learning & Sửa lỗi chuyên sâu (25% thời gian ti�
 - Dùng model v2 dự đoán trên tập ảnh chưa gán nhãn mới, lọc ra ảnh có độ tự tin thấp (low confidence) để ưu tiên sửa nhãn (Active Learning) tạo Dataset v3.
 
 GIAI ĐOẠN 4: Đóng băng dữ liệu, Tinh chỉnh & Hoàn thiện Báo cáo (10% thời gian cuối)
-- TV 5 train bản cuối trên Dataset v3/v4 và kiểm tra kỹ định dạng file submission.
+- TV 5 train bản cuối trên Dataset v3/v4 và đóng gói file submission đúng chuẩn `du_lieu.zip` (chứa `images/`, `labels/`, `data.yaml`).
 - TV 1 tổng hợp bảng thống kê nguồn dữ liệu, license, script mapping và biểu đồ tăng trưởng điểm số qua các vòng (v1 -> v2 -> v3) vào báo cáo nộp ban tổ chức.
 
 ================================================================================
-5. NGUYÊN TẮC SỐNG CÒN ĐỂ TRÁNH MẤT ĐIỂM
+6. NGUYÊN TẮC SỐNG CÒN ĐỂ TRÁNH MẤT ĐIỂM
 ================================================================================
 1. Chống rò rỉ dữ liệu (Data Leakage): Tuyệt đối không để lọt ảnh từ tập Train/Public vào Golden Val Set (phải check hash trước khi train).
-2. Đồng nhất mask có người / không người: Với lớp 5 (Motorcyclist) và 7 (Cyclist), bắt buộc vẽ 1 polygon mask duy nhất bao trùm cả người lái lẫn xe. Nếu chở hàng cồng kềnh, phần hàng hóa gắn trên xe cũng gộp chung vào mask của xe/người lái.
-3. Ghi log ngay khi tải Public Dataset: Duy trì bảng log metadata trong tài liệu này và Google Sheet chung, ghi rõ Tên, URL, License, Số lượng ảnh dùng và Rule ánh xạ class để cuối giờ không mất thời gian tìm lại.
+2. Đồng nhất quy tắc gộp & tách:
+   - Với lớp 5 (Motorcyclist) và 7 (Cyclist), bắt buộc vẽ 1 polygon mask duy nhất bao trùm cả người lái lẫn xe.
+   - Với xe đầu kéo có rơ-moóc/container, bắt buộc tách thành 2 instance riêng: đầu kéo là 2: Truck, rơ-moóc/container là 3: Other vehicle.
+   - Với người dắt xe: người dắt là 8: Pedestrian, xe được dắt là 4: Motorcycle hoặc 6: Bicycle.
+3. Tuân thủ Zero-Overlap: Mask chỉ phủ phần nhìn thấy, không chồng lấn lên nhau, không phủ bóng đổ/phản chiếu.
+4. Ghi log ngay khi tải Public Dataset: Duy trì bảng log metadata trong tài liệu này và Google Sheet chung, ghi rõ Tên, URL, License, Số lượng ảnh dùng và Rule ánh xạ class để cuối giờ không mất thời gian tìm lại.
