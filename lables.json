@@ -1,0 +1,79 @@
+[
+    {
+        "name": "Car",
+        "id": 0,
+        "color": "#e6194b",
+        "type": "polygon",
+        "attributes": []
+    },
+    {
+        "name": "Bus",
+        "id": 1,
+        "color": "#3cb44b",
+        "type": "polygon",
+        "attributes": []
+    },
+    {
+        "name": "Truck",
+        "id": 2,
+        "color": "#ffe119",
+        "type": "polygon",
+        "attributes": []
+    },
+    {
+        "name": "Other vehicle",
+        "id": 3,
+        "color": "#4363d8",
+        "type": "polygon",
+        "attributes": []
+    },
+    {
+        "name": "Motorcycle",
+        "id": 4,
+        "color": "#f58231",
+        "type": "polygon",
+        "attributes": []
+    },
+    {
+        "name": "Motorcyclist",
+        "id": 5,
+        "color": "#911eb4",
+        "type": "polygon",
+        "attributes": []
+    },
+    {
+        "name": "Bicycle",
+        "id": 6,
+        "color": "#46f0f0",
+        "type": "polygon",
+        "attributes": []
+    },
+    {
+        "name": "Cyclist",
+        "id": 7,
+        "color": "#f032e6",
+        "type": "polygon",
+        "attributes": []
+    },
+    {
+        "name": "Pedestrian",
+        "id": 8,
+        "color": "#bcf60c",
+        "type": "polygon",
+        "attributes": []
+    },
+    {
+        "name": "Sign",
+        "id": 9,
+        "color": "#fabebe",
+        "type": "polygon",
+        "attributes": []
+    },
+    {
+        "name": "Traffic light",
+        "id": 10,
+        "color": "#008080",
+        "type": "polygon",
+        "attributes": []
+    }
+]

@@ -1,0 +1,155 @@
+================================================================================
+
+KẾ HOẠCH PHÂN CÔNG CÔNG VIỆC & QUY TRÌNH DATA FLYWHEEL (NHÓM 5 THÀNH VIÊN)
+
+Bài toán: Instance Segmentation Giao thông Việt Nam (yolo26n-seg, imgsz=640)
+
+================================================================================
+
+
+
+1. DANH SÁCH 11 LỚP ĐỐI TƯỢNG CHUẨN
+
+--------------------------------------------------------------------------------
+
+0 = Car (Ô tô con)
+
+1 = Bus (Xe buýt / xe khách)
+
+2 = Truck (Xe tải)
+
+3 = Other vehicle (Phương tiện khác: xích lô, xe ba gác, xe điện du lịch, xe chuyên dụng...)
+
+4 = Motorcycle (Xe máy - không người)
+
+5 = Motorcyclist (Xe máy - có người: 1 mask duy nhất bao gồm cả người + xe)
+
+6 = Bicycle (Xe đạp - không người)
+
+7 = Cyclist (Xe đạp - có người: 1 mask duy nhất bao gồm cả người + xe)
+
+8 = Pedestrian (Người đi bộ)
+
+9 = Sign (Biển báo giao thông)
+
+10 = Traffic light (Đèn giao thông)
+
+
+
+================================================================================
+
+2. PHÂN CÔNG VAI TRÒ CHI TIẾT CHO 5 THÀNH VIÊN
+
+================================================================================
+
+
+
+[THÀNH VIÊN 1]: Team Lead & Data Architect (Quản lý tiến độ, chuẩn hóa & báo cáo)
+
+- Thiết lập tài liệu quy tắc gán nhãn (Annotation Guideline) chặt chẽ cho 11 lớp (đặc biệt cách gộp mask người + xe cho lớp 5 và 7, cách xử lý hàng cồng kềnh).
+
+- Quản lý version dữ liệu (v1, v2, v3...) và duy trì file log/metadata của mọi public dataset (tên, đường dẫn URL, giấy phép/license, số ảnh đã dùng, bảng ánh xạ class) để nộp báo cáo cuối kỳ.
+
+- Xây dựng bộ Golden Val Set (300 - 500 ảnh đại diện đủ nắng, mưa, đêm, kẹt xe) cố định qua các vòng để đo lường công bằng.
+
+
+
+[THÀNH VIÊN 2]: Auto-Labeling & Synthetic Engineer (Tự động hóa nhãn & dữ liệu tổng hợp)
+
+- Xây dựng pipeline gán nhãn nháp tự động (kết hợp detector mạnh như YOLO11x/YOLOv8x/GroundingDINO + SAM 2 để sinh polygon mask định dạng YOLO-seg).
+
+- Viết script ghép cặp tự động (IoU / Overlap) giữa 'person' và 'motorcycle'/'bicycle' để tự động tách lớp 4 vs 5 và 6 vs 7.
+
+- Tạo dữ liệu tổng hợp (Copy-Paste augmentation) nhân bản các lớp hiếm (3: Other vehicle, 6: Bicycle, 7: Cyclist) sang các nền ảnh đêm/mưa.
+
+- Thực hiện kỹ thuật Tiling (cắt ảnh 2x2 có chồng lấn 15-20%) cho ảnh độ phân giải cao để giữ chi tiết các vật thể nhỏ (Sign, Traffic light) khi resize về 640x640.
+
+
+
+[THÀNH VIÊN 3]: Public Data & Edge-Case Hunter (Khai thác dữ liệu công khai & săn cảnh khó)
+
+- Thu thập, lọc và ánh xạ (remap) nhãn từ các bộ dataset công khai (COCO, BDD100K, Mapillary Vistas, OpenImages, dataset giao thông Việt Nam/Đông Nam Á trên Roboflow/Kaggle).
+
+- Cắt frame từ video dashcam/camera giao thông Việt Nam các cảnh khó: trời mưa, ban đêm, ngược sáng, xích lô/xe ba gác, người chở hàng cồng kềnh.
+
+- Chạy script lọc bỏ ảnh trùng lặp (Perceptual Hash / Cosine Similarity) giữa tập Train và Golden Val Set.
+
+
+
+[THÀNH VIÊN 4]: Quality Assurance (QA) & Annotation Lead (Duyệt nhãn & sửa nhãn tinh)
+
+- Quản lý workspace trên công cụ gán nhãn (CVAT hoặc Roboflow), chia batch nhãn nháp cho cả nhóm cùng sửa.
+
+- Duyệt chéo (Cross-check) 100% nhãn trước khi đóng gói vào bộ train: bắt lỗi sót mask nhỏ (9: Sign, 10: Traffic light), lỗi vẽ đè mask, hoặc gán nhầm Other vehicle.
+
+- Trực tiếp gán nhãn tay các mẫu cực khó mà auto-label thất bại.
+
+
+
+[THÀNH VIÊN 5]: MLOps, Training & Error Analyst (Huấn luyện yolo26n-seg & Phân tích lỗi)
+
+- Thiết lập pipeline train yolo26n-seg (imgsz=640) trên Colab/Kaggle/GPU thuê, tối ưu hyperparameter augmentation (mosaic, copy-paste, hsv, scale).
+
+- Sau mỗi vòng train, xuất Confusion Matrix, tính mAP50-95 theo từng class và rút trích các ảnh False Positive / False Negative nặng nhất.
+
+- Gửi danh sách "lớp đang yếu" ngược lại cho TV 2 và TV 3 để bổ sung đúng loại dữ liệu thiếu ở vòng tiếp theo (Active Learning).
+
+
+
+================================================================================
+
+3. QUY TRÌNH PHỐI HỢP THEO TỪNG GIAI ĐOẠN (DATA FLYWHEEL)
+
+================================================================================
+
+
+
+GIAI ĐOẠN 1: Khởi động & Baseline (15% thời gian đầu)
+
+- TV 1 dựng quy tắc gán nhãn + tạo Golden Val Set (cả 5 người cùng gán nhãn tay thật chuẩn bộ Val này trong 1-2 tiếng đầu).
+
+- TV 3 gom nhanh các class sẵn có từ public dataset (COCO/BDD100K/Mapillary) để có ngay Dataset v1 (~3.000 - 5.000 ảnh).
+
+- TV 5 chạy baseline yolo26n-seg trên v1 để lấy điểm mốc đầu tiên.
+
+
+
+GIAI ĐOẠN 2: Tăng tốc Auto-Label & Phủ dữ liệu Việt Nam (50% thời gian giữa)
+
+- TV 3 trích xuất ảnh giao thông Việt Nam (đủ ngày, đêm, mưa, kẹt xe) đẩy qua pipeline SAM 2 của TV 2 để sinh nhãn nháp.
+
+- Cả 5 người dành khung giờ cố định (1-2 tiếng/ngày) sửa nhãn nháp trên CVAT; TV 4 chốt kiểm duyệt và gộp thành Dataset v2.
+
+- TV 2 chạy script Copy-Paste cấy thêm Other vehicle (xích lô, xe ba gác) và Bicycle/Cyclist vào ảnh đường phố.
+
+
+
+GIAI ĐOẠN 3: Active Learning & Sửa lỗi chuyên sâu (25% thời gian tiếp theo)
+
+- TV 5 phân tích kết quả v2: xác định lớp có mAP thấp nhất (thường là Sign, Traffic light, Other vehicle).
+
+- TV 2 áp dụng Tiling cho ảnh chứa biển báo/đèn giao thông nhỏ.
+
+- Dùng model v2 dự đoán trên tập ảnh chưa gán nhãn mới, lọc ra ảnh có độ tự tin thấp (low confidence) để ưu tiên sửa nhãn (Active Learning) tạo Dataset v3.
+
+
+
+GIAI ĐOẠN 4: Đóng băng dữ liệu, Tinh chỉnh & Hoàn thiện Báo cáo (10% thời gian cuối)
+
+- TV 5 train bản cuối trên Dataset v3/v4 và kiểm tra kỹ định dạng file submission.
+
+- TV 1 tổng hợp bảng thống kê nguồn dữ liệu, license, script mapping và biểu đồ tăng trưởng điểm số qua các vòng (v1 -> v2 -> v3) vào báo cáo nộp ban tổ chức.
+
+
+
+================================================================================
+
+4. NGUYÊN TẮC SỐNG CÒN ĐỂ TRÁNH MẤT ĐIỂM
+
+================================================================================
+
+1. Chống rò rỉ dữ liệu (Data Leakage): Tuyệt đối không để lọt ảnh từ tập Train/Public vào Golden Val Set (phải check hash trước khi train).
+
+2. Đồng nhất mask có người / không người: Với lớp 5 (Motorcyclist) và 7 (Cyclist), bắt buộc vẽ 1 polygon mask duy nhất bao trùm cả người lái lẫn xe. Nếu chở hàng cồng kềnh, phần hàng hóa gắn trên xe cũng gộp chung vào mask của xe/người lái.
+
+3. Ghi log ngay khi tải Public Dataset: Tạo Google Sheet chung, hễ TV 3 tải bộ dữ liệu nào về là điền ngay Tên, URL, License, Số lượng ảnh dùng và Rule ánh xạ class để cuối giờ không mất thời gian tìm lại.
