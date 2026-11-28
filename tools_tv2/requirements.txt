@@ -1,0 +1,7 @@
+# Chạy trên máy cá nhân (CPU): pair_riders, copy_paste, tile_images, visualize, check_leak
+numpy
+opencv-python
+pyyaml
+# Chỉ cần cho autolabel.py (nên chạy trên Colab/Kaggle GPU)
+# ultralytics==8.4.214      (YOLO11x / YOLO-World / SAM 2.1)
+# transformers              (chỉ khi --open-vocab gdino)
